@@ -1,0 +1,57 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - name: Lint
+        run: |
+          uvx ruff check .
+          uvx ruff format --check .
+      - name: Test
+        run: uv run --python 3.12 --group dev pytest -q
+
+  cascade-gate:
+    # Runs the full 20,000 ticket evaluation with simulated LLM tiers. Fails if the chosen operating
+    # point falls more than 1 point below Opus-for-everything accuracy or costs more than $0.50 per
+    # 1,000 tickets.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - name: Evaluate and gate
+        run: |
+          uv run --python 3.12 ticketrouter eval --gate --tolerance 0.01 --budget 0.50 \
+            --out reports/eval.json --summary "$GITHUB_STEP_SUMMARY"
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cascade-eval
+          path: reports/eval.json
+
+  docker:
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build image
+        run: docker build -t ticket-router:ci .
+      - name: Smoke test container
+        run: |
+          docker run -d --name tr -p 8836:8836 -e TICKETROUTER_TICKETS=4000 ticket-router:ci
+          for i in $(seq 1 60); do curl -sf http://localhost:8836/healthz && break; sleep 2; done
+          curl -sf -H 'content-type: application/json' \
+            -d '{"text":"I forgot my password and the reset email never arrives."}' \
+            http://localhost:8836/api/classify | grep '"tier"'
+          curl -sf -H 'content-type: application/json' \
+            -d '{"text":"Is there an outage? The API returns 500 errors for all requests."}' \
+            http://localhost:8836/api/classify | grep incident_response
+          curl -sf http://localhost:8836/metrics | grep ticketrouter_tickets_routed_total
+          docker rm -f tr

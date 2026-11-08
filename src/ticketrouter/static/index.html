@@ -1,0 +1,340 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ticket Router</title>
+<style>
+:root {
+  --bg: #f6f7f9; --panel: #ffffff; --text: #1c2330; --muted: #5d6878; --border: #dde2e9;
+  --track: #e8ebf0; --accent: #2f6fdb; --accent-soft: #e4edfc; --good: #11804f; --good-soft: #e3f5ec;
+  --warn: #8a5a00; --warn-soft: #fff4dc; --bad: #b42318; --bad-soft: #fde8e6; --violet: #6b4fd8; --violet-soft: #eeeafd;
+  --dot: #b7c0cc; --radius: 10px; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #11151c; --panel: #181e27; --text: #e6eaf0; --muted: #9aa5b5; --border: #2a3340;
+    --track: #232b37; --accent: #6c9cf0; --accent-soft: #1b2a44; --good: #4ccb8f; --good-soft: #15302a;
+    --warn: #f3c46b; --warn-soft: #3a2e14; --bad: #ff8a7a; --bad-soft: #3b1d1b; --violet: #a993ff; --violet-soft: #2a2347;
+    --dot: #4a5566; color-scheme: dark;
+  }
+}
+* { box-sizing: border-box; }
+html, body { overflow-x: hidden; }
+body { margin: 0; background: var(--bg); color: var(--text); font-size: 14px; }
+header { padding: 18px 24px 8px; display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+h1 { font-size: 20px; margin: 0; }
+h2 { font-size: 13px; margin: 0 0 12px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
+.muted { color: var(--muted); }
+.small { font-size: 12px; }
+main { padding: 8px 24px 24px; display: grid; gap: 16px; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.panel { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; min-width: 0; }
+.kpi .v { font-size: 24px; font-weight: 650; font-variant-numeric: tabular-nums; }
+.kpi .l { color: var(--muted); margin-top: 2px; }
+.wide { grid-column: span 4; } .half { grid-column: span 2; } .three { grid-column: span 3; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th, td { text-align: left; padding: 6px 8px; border-top: 1px solid var(--border); vertical-align: top; }
+th { color: var(--muted); font-weight: 600; border-top: 0; white-space: nowrap; }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.scroll { overflow-x: auto; max-width: 100%; }
+.badge { display: inline-block; font-size: 11px; font-weight: 600; padding: 1px 8px; border-radius: 10px; white-space: nowrap; }
+.t-safety { background: var(--bad-soft); color: var(--bad); }
+.t-rules { background: var(--track); color: var(--muted); }
+.t-classical { background: var(--good-soft); color: var(--good); }
+.t-haiku { background: var(--accent-soft); color: var(--accent); }
+.t-opus { background: var(--violet-soft); color: var(--violet); }
+.t-human { background: var(--warn-soft); color: var(--warn); }
+.sim { background: var(--warn-soft); color: var(--warn); }
+.ticket { max-width: 420px; overflow-wrap: anywhere; }
+tr.pick { cursor: pointer; } tr.pick:hover td { background: var(--track); }
+tr.sel td { background: var(--accent-soft); }
+label { display: block; color: var(--muted); font-size: 12px; margin: 10px 0 4px; }
+select, input, textarea, button { font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 7px 9px; width: 100%; max-width: 100%; }
+textarea { min-height: 72px; resize: vertical; }
+button { background: var(--accent); color: #fff; border: 0; cursor: pointer; font-weight: 600; width: auto; margin-top: 12px; }
+button.ghost { background: transparent; color: var(--accent); border: 1px solid var(--border); }
+.row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.out { margin-top: 10px; font-size: 13px; overflow-wrap: anywhere; }
+svg { width: 100%; height: auto; display: block; }
+#calib svg { max-width: 340px; margin: 0 auto; }
+svg text { fill: var(--muted); font-size: 11px; }
+.legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; color: var(--muted); margin-top: 6px; }
+.sw { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 5px; vertical-align: -1px; }
+.cluster { border-top: 1px solid var(--border); padding: 10px 0; }
+.cluster:first-of-type { border-top: 0; }
+.terms { display: flex; gap: 6px; flex-wrap: wrap; margin: 6px 0; }
+.chip { font-size: 12px; padding: 1px 8px; border-radius: 10px; background: var(--track); color: var(--muted); }
+.ex { font-size: 12px; color: var(--muted); margin: 3px 0; overflow-wrap: anywhere; }
+.filters { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+.filters select { width: auto; }
+@media (max-width: 900px) {
+  main { grid-template-columns: repeat(2, minmax(0, 1fr)); padding: 8px 16px 16px; }
+  header { padding: 16px 16px 8px; }
+  .wide, .half, .three, .panel:not(.kpi) { grid-column: span 2; }
+}
+@media (max-width: 520px) {
+  .hide-sm { display: none; }
+  .kpi .v { font-size: 20px; }
+}
+</style>
+</head>
+<body>
+<header>
+  <h1>Ticket Router</h1>
+  <span class="muted">Corvane support, model cascade</span>
+  <span id="simbadge" class="badge sim">LLM tiers simulated</span>
+</header>
+<main>
+  <div class="panel kpi"><div class="v" id="k-acc">-</div><div class="l">cascade intent accuracy</div></div>
+  <div class="panel kpi"><div class="v" id="k-cost">-</div><div class="l">cost per 1,000 tickets</div></div>
+  <div class="panel kpi"><div class="v" id="k-llm">-</div><div class="l">tickets sent to an LLM</div></div>
+  <div class="panel kpi"><div class="v" id="k-safe">-</div><div class="l">safety tickets in a human queue</div></div>
+
+  <section class="panel three">
+    <h2>Cost vs accuracy</h2>
+    <div id="chart"></div>
+    <div class="legend">
+      <span><span class="sw" style="background:var(--dot)"></span>threshold setting</span>
+      <span><span class="sw" style="background:var(--accent)"></span>Pareto frontier</span>
+      <span><span class="sw" style="background:var(--violet)"></span>single tier</span>
+      <span><span class="sw" style="background:var(--good)"></span>chosen operating point</span>
+    </div>
+    <p class="muted small" id="chart-note"></p>
+  </section>
+  <section class="panel">
+    <h2>Calibration, classical tier</h2>
+    <div id="calib"></div>
+    <p class="muted small" id="ece"></p>
+  </section>
+
+  <section class="panel wide">
+    <h2>Cascade vs single tier</h2>
+    <div class="scroll"><table id="compare"></table></div>
+  </section>
+
+  <section class="panel three">
+    <h2>Incoming queue</h2>
+    <div class="filters">
+      <select id="f-team"><option value="">all teams</option></select>
+      <select id="f-tier"><option value="">all tiers</option></select>
+    </div>
+    <div class="scroll"><table id="queue"></table></div>
+  </section>
+  <section class="panel">
+    <h2>Correct a routing decision</h2>
+    <div class="muted small">Click a queue row to load it.</div>
+    <label for="c-id">Ticket</label><input id="c-id" placeholder="ticket id">
+    <div class="ex" id="c-text"></div>
+    <label for="c-intent">Intent</label><select id="c-intent"></select>
+    <label for="c-new">Or a new intent name</label><input id="c-new" placeholder="e.g. pulse_forecasting">
+    <label for="c-prio">Priority</label><select id="c-prio"></select>
+    <div class="row"><button id="c-save">Save correction</button><button class="ghost" id="c-retrain">Retrain classical tier</button></div>
+    <div class="out" id="c-out"></div>
+    <h2 style="margin-top:22px">Route a new ticket</h2>
+    <textarea id="n-text" placeholder="Paste a support ticket"></textarea>
+    <button id="n-go">Classify and route</button>
+    <div class="out" id="n-out"></div>
+  </section>
+
+  <section class="panel half">
+    <h2>Drift: share of tickets the classical tier is unsure about</h2>
+    <div id="drift"></div>
+    <p class="muted small" id="drift-note"></p>
+  </section>
+  <section class="panel half">
+    <h2>Unfamiliar clusters for labeling</h2>
+    <div id="clusters"></div>
+  </section>
+</main>
+<script>
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
+const pct = (x, d = 1) => (x * 100).toFixed(d) + "%";
+const usd = (x) => "$" + (x < 0.01 ? x.toFixed(4) : x.toFixed(2));
+const badge = (t) => `<span class="badge t-${t}">${t}</span>`;
+let selected = null;
+
+async function api(path, opts) {
+  const r = await fetch(path, opts);
+  const j = await r.json();
+  if (!r.ok) throw new Error(j.detail ? JSON.stringify(j.detail) : r.status);
+  return j;
+}
+
+function xScale(c, w) { // log scale with a floor so free tiers still show
+  const lo = Math.log10(0.0001), hi = Math.log10(5);
+  return ((Math.log10(Math.max(c, 0.0001)) - lo) / (hi - lo)) * w;
+}
+
+function chart(rep) {
+  const W = 640, H = 300, L = 48, B = 34, T = 10, R = 12, w = W - L - R, h = H - T - B;
+  const pts = rep.sweep_points, singles = rep.single_tier;
+  // Scale to the cascade points and the LLM baselines; anything far below is pinned to the floor.
+  const accs = pts.map((p) => p.intent_accuracy).concat([singles.classical, singles.haiku, singles.opus].map((s) => s.intent_accuracy));
+  const yLo = Math.max(0.5, Math.floor((Math.min(...accs) - 0.01) * 50) / 50), yHi = Math.min(1, Math.ceil(Math.max(...accs) * 50) / 50);
+  const y = (a) => T + h - ((Math.max(a, yLo) - yLo) / (yHi - yLo)) * h;
+  const x = (c) => L + xScale(c, w);
+  let s = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Cost per 1,000 tickets against intent accuracy">`;
+  for (let a = yLo; a <= yHi + 1e-9; a += 0.02) {
+    s += `<line x1="${L}" x2="${W - R}" y1="${y(a)}" y2="${y(a)}" stroke="var(--track)"/><text x="${L - 6}" y="${y(a) + 4}" text-anchor="end">${Math.round(a * 100)}%</text>`;
+  }
+  [0.0001, 0.001, 0.01, 0.1, 1].forEach((c) => {
+    s += `<line x1="${x(c)}" x2="${x(c)}" y1="${T}" y2="${T + h}" stroke="var(--track)"/><text x="${x(c)}" y="${H - 16}" text-anchor="middle">${c < 0.001 ? "$0" : "$" + c}</text>`;
+  });
+  s += `<text x="${L + w / 2}" y="${H - 2}" text-anchor="middle">cost per 1,000 tickets (log scale)</text>`;
+  pts.forEach((p) => { s += `<circle cx="${x(p.cost_per_1k)}" cy="${y(p.intent_accuracy)}" r="2.2" fill="var(--dot)"><title>${esc(p.policy.label)}: ${pct(p.intent_accuracy)}, ${usd(p.cost_per_1k)}</title></circle>`; });
+  const fr = rep.frontier.map((p) => `${x(p.cost_per_1k)},${y(p.intent_accuracy)}`).join(" ");
+  s += `<polyline points="${fr}" fill="none" stroke="var(--accent)" stroke-width="2"/>`;
+  const names = {rules: "rules only", classical: "classical only", haiku: "Haiku only", opus: "Opus only"};
+  Object.entries(singles).forEach(([k, v]) => {
+    const cx = x(v.cost_per_1k), cy = y(v.intent_accuracy);
+    s += `<rect x="${cx - 4}" y="${cy - 4}" width="8" height="8" fill="var(--violet)"><title>${names[k]}</title></rect>`;
+    const anchor = cx > W - 120 ? "end" : "start", dx = anchor === "end" ? -8 : 8;
+    const off = v.intent_accuracy < yLo ? `, ${pct(v.intent_accuracy)} (below scale)` : "";
+    s += `<text x="${cx + dx}" y="${cy + (off ? -6 : 4)}" text-anchor="${anchor}" style="fill:var(--violet)">${names[k]}${off}</text>`;
+  });
+  const op = rep.operating_point;
+  s += `<circle cx="${x(op.cost_per_1k)}" cy="${y(op.intent_accuracy)}" r="6" fill="var(--good)" stroke="var(--panel)" stroke-width="2"><title>operating point</title></circle>`;
+  s += `<text x="${x(op.cost_per_1k) - 10}" y="${y(op.intent_accuracy) - 10}" text-anchor="end" style="fill:var(--good)">chosen</text>`;
+  $("chart").innerHTML = s + "</svg>";
+  $("chart-note").textContent = `${pts.length} threshold settings on ${rep.dataset.test.toLocaleString()} held-out tickets. Chosen: ${op.policy.label}. Haiku and Opus accuracy, latency, and tokens are simulated.`;
+}
+
+function calib(rep) {
+  const W = 220, H = 200, L = 30, B = 24, T = 6, R = 6, w = W - L - R, h = H - T - B;
+  const x = (v) => L + v * w, y = (v) => T + h - v * h;
+  let s = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Reliability diagram">`;
+  s += `<line x1="${x(0)}" y1="${y(0)}" x2="${x(1)}" y2="${y(1)}" stroke="var(--track)" stroke-dasharray="4 3"/>`;
+  [0, 0.5, 1].forEach((v) => { s += `<text x="${L - 4}" y="${y(v) + 4}" text-anchor="end">${v}</text><text x="${x(v)}" y="${H - 8}" text-anchor="middle">${v}</text>`; });
+  const bins = rep.calibration.bins.filter((b) => b.count > 0);
+  const max = Math.max(...bins.map((b) => b.count));
+  bins.forEach((b) => {
+    const bw = w / 10 - 2;
+    s += `<rect x="${x(b.lo) + 1}" y="${y(b.accuracy)}" width="${bw}" height="${y(0) - y(b.accuracy)}" fill="var(--accent)" opacity="${0.35 + 0.65 * b.count / max}"><title>conf ${b.lo}-${b.hi}: accuracy ${pct(b.accuracy)}, n=${b.count}</title></rect>`;
+  });
+  $("calib").innerHTML = s + "</svg>";
+  $("ece").textContent = `Bars: accuracy in each confidence bin (darker means more tickets). Dashed: perfect calibration. ECE ${rep.calibration.ece.toFixed(3)}.`;
+}
+
+function compare(rep) {
+  const rows = [["Rules only", rep.single_tier.rules], ["Classical only", rep.single_tier.classical],
+    ["Haiku for everything (sim)", rep.single_tier.haiku], ["Opus for everything (sim)", rep.single_tier.opus],
+    ["Cascade, chosen point", rep.cascade]];
+  let s = `<tr><th>Policy</th><th class="num">Intent acc</th><th class="num">Macro F1</th><th class="num">Priority</th><th class="num">Team</th><th class="num">Cost / 1k</th><th class="num hide-sm">p95 latency</th><th class="num hide-sm">LLM share</th></tr>`;
+  rows.forEach(([n, r]) => {
+    const llm = (r.tier_share.haiku || 0) + (r.tier_share.opus || 0);
+    s += `<tr><td>${n}</td><td class="num">${pct(r.intent_accuracy)}</td><td class="num">${r.intent_macro_f1.toFixed(3)}</td><td class="num">${pct(r.priority_accuracy)}</td><td class="num">${pct(r.team_accuracy)}</td><td class="num">${usd(r.cost_per_1k)}</td><td class="num hide-sm">${Math.round(r.latency_p95_ms)} ms</td><td class="num hide-sm">${pct(llm, 0)}</td></tr>`;
+  });
+  $("compare").innerHTML = s;
+}
+
+async function loadQueue() {
+  const q = new URLSearchParams();
+  if ($("f-team").value) q.set("team", $("f-team").value);
+  if ($("f-tier").value) q.set("tier", $("f-tier").value);
+  q.set("limit", "40");
+  const j = await api("/api/queue?" + q);
+  const fill = (sel, obj) => {
+    const cur = sel.value, first = sel.options[0].outerHTML;
+    sel.innerHTML = first + Object.keys(obj).sort().map((k) => `<option ${k === cur ? "selected" : ""}>${esc(k)}</option>`).join("");
+  };
+  fill($("f-team"), j.by_team); fill($("f-tier"), j.by_tier);
+  let s = `<tr><th>Tier</th><th>Ticket</th><th>Intent</th><th class="hide-sm">Team</th><th class="hide-sm">Priority</th><th class="num">Conf</th><th class="num hide-sm">Cost</th></tr>`;
+  j.items.forEach((it) => {
+    const d = it.decision, fixed = it.corrected ? ` <span class="badge t-classical">fixed: ${esc(it.corrected.intent)}</span>` : "";
+    s += `<tr class="pick ${selected === it.id ? "sel" : ""}" data-id="${esc(it.id)}"><td>${badge(d.tier)}</td><td class="ticket"><span class="muted small">${esc(it.id)}</span> ${esc(it.text.slice(0, 140))}${it.text.length > 140 ? "..." : ""}</td><td>${esc(d.intent)}${fixed}</td><td class="hide-sm">${esc(d.team)}</td><td class="hide-sm">${esc(d.priority)}</td><td class="num">${d.confidence.toFixed(2)}</td><td class="num hide-sm">${usd(d.cost)}</td></tr>`;
+  });
+  $("queue").innerHTML = s;
+  document.querySelectorAll("#queue tr.pick").forEach((tr) => tr.addEventListener("click", () => pick(tr.dataset.id)));
+}
+
+async function pick(id) {
+  selected = id;
+  const it = await api("/api/tickets/" + encodeURIComponent(id));
+  $("c-id").value = id;
+  $("c-text").textContent = it.text;
+  $("c-intent").value = it.decision.intent;
+  $("c-prio").value = it.decision.priority;
+  $("c-new").value = "";
+  document.querySelectorAll("#queue tr.pick").forEach((tr) => tr.classList.toggle("sel", tr.dataset.id === id));
+}
+
+function driftChart(d) {
+  const W = 520, H = 200, L = 40, B = 26, T = 8, R = 8, w = W - L - R, h = H - T - B;
+  const max = Math.max(0.05, ...d.weeks.map((r) => Math.max(r.low_conf_share, r.limit))) * 1.15;
+  const bw = w / d.weeks.length;
+  const y = (v) => T + h - (v / max) * h;
+  let s = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Weekly low-confidence share">`;
+  [0, max / 2, max].forEach((v) => { s += `<line x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}" stroke="var(--track)"/><text x="${L - 6}" y="${y(v) + 4}" text-anchor="end">${Math.round(v * 100)}%</text>`; });
+  d.weeks.forEach((r, i) => {
+    const fill = r.alarm ? "var(--bad)" : "var(--accent)";
+    s += `<rect x="${L + i * bw + 3}" y="${y(r.low_conf_share)}" width="${bw - 6}" height="${y(0) - y(r.low_conf_share)}" fill="${fill}"><title>week ${r.week}: ${pct(r.low_conf_share)} (limit ${pct(r.limit)})</title></rect>`;
+    s += `<text x="${L + i * bw + bw / 2}" y="${H - 8}" text-anchor="middle">w${r.week}</text>`;
+  });
+  const lim = d.weeks[d.weeks.length - 1].limit;
+  s += `<line x1="${L}" x2="${W - R}" y1="${y(lim)}" y2="${y(lim)}" stroke="var(--bad)" stroke-dasharray="5 4"/>`;
+  $("drift").innerHTML = s + "</svg>";
+  $("drift-note").textContent = d.first_alarm_week === null
+    ? "No alarm. Dashed line: alarm limit (baseline plus 3 standard errors)."
+    : `Baseline ${pct(d.baseline_share)} from weeks 0 to 3. Alarm from week ${d.first_alarm_week} (red bars). Dashed line: alarm limit.`;
+  if (!d.surfaced.length) { $("clusters").innerHTML = `<p class="muted">Nothing unfamiliar to label.</p>`; return; }
+  $("clusters").innerHTML = d.surfaced.slice(0, 4).map((c) => `
+    <div class="cluster"><div><b>${c.size} tickets</b> <span class="muted small">novelty ${c.novelty}</span></div>
+    <div class="terms">${c.top_terms.slice(0, 7).map((t) => `<span class="chip">${esc(t)}</span>`).join("")}</div>
+    ${c.examples.slice(0, 2).map((e) => `<div class="ex">${esc(e)}</div>`).join("")}
+    <button class="ghost" data-ids="${esc(c.ticket_ids.join(","))}">Label a ticket from this cluster</button></div>`).join("");
+  document.querySelectorAll("#clusters button").forEach((b) => b.addEventListener("click", async () => {
+    const ids = b.dataset.ids.split(",");
+    const j = await api("/api/queue?limit=500");
+    const hit = j.items.find((it) => ids.includes(it.id));
+    if (hit) { await pick(hit.id); $("c-new").focus(); }
+    else { $("c-out").textContent = "None of these tickets are in the live queue. Route one with the form below."; }
+  }));
+}
+
+async function init() {
+  const [tax, rep, drift] = await Promise.all([api("/api/taxonomy"), api("/api/eval"), api("/api/drift")]);
+  $("c-intent").innerHTML = tax.intents.map((i) => `<option>${i.name}</option>`).join("");
+  $("c-prio").innerHTML = tax.priorities.map((p) => `<option>${p}</option>`).join("");
+  $("simbadge").style.display = rep.llm_tiers_simulated ? "" : "none";
+  const c = rep.cascade, opus = rep.single_tier.opus;
+  $("k-acc").textContent = pct(c.intent_accuracy);
+  $("k-cost").textContent = `${usd(c.cost_per_1k)} vs ${usd(opus.cost_per_1k)}`;
+  $("k-llm").textContent = pct((c.tier_share.haiku || 0) + (c.tier_share.opus || 0), 0);
+  $("k-safe").textContent = pct(rep.safety.routed_to_human_queue);
+  chart(rep); calib(rep); compare(rep); driftChart(drift);
+  await loadQueue();
+}
+
+$("f-team").addEventListener("change", loadQueue);
+$("f-tier").addEventListener("change", loadQueue);
+$("c-save").addEventListener("click", async () => {
+  try {
+    const intent = $("c-new").value.trim() || $("c-intent").value;
+    const j = await api("/api/feedback", {method: "POST", headers: {"content-type": "application/json"},
+      body: JSON.stringify({ticket_id: $("c-id").value.trim(), intent, priority: $("c-prio").value, agent: "ui"})});
+    $("c-out").textContent = `Saved. ${j.corrections} correction(s) waiting for the next retrain.`;
+    loadQueue();
+  } catch (e) { $("c-out").textContent = "Error: " + e.message; }
+});
+$("c-retrain").addEventListener("click", async () => {
+  $("c-out").textContent = "Retraining...";
+  try {
+    const j = await api("/api/retrain", {method: "POST"});
+    const pend = Object.keys(j.pending_new_intents).length ? ` Waiting for more examples: ${Object.entries(j.pending_new_intents).map(([k, v]) => `${k} (${v})`).join(", ")}.` : "";
+    $("c-out").textContent = `Model v${j.model_version}: ${j.corrections_used} correction(s), ${j.classes} classes. Held-out accuracy ${pct(j.holdout_accuracy_before)} to ${pct(j.holdout_accuracy_after)} in ${j.seconds}s.${pend}`;
+  } catch (e) { $("c-out").textContent = "Error: " + e.message; }
+});
+$("n-go").addEventListener("click", async () => {
+  try {
+    const it = await api("/api/classify", {method: "POST", headers: {"content-type": "application/json"},
+      body: JSON.stringify({text: $("n-text").value})});
+    const d = it.decision;
+    $("n-out").innerHTML = `${badge(d.tier)} <b>${esc(d.intent)}</b> to ${esc(d.team)}, ${esc(d.priority)}, confidence ${d.confidence.toFixed(2)}, cost ${usd(d.cost)}${d.simulated_llm ? " (simulated)" : ""}<div class="ex">${esc(d.reason)}</div>`;
+    loadQueue();
+  } catch (e) { $("n-out").textContent = "Error: " + e.message; }
+});
+init().catch((e) => { document.querySelector("main").insertAdjacentHTML("afterbegin", `<div class="panel wide">Could not load: ${esc(e.message)}</div>`); });
+</script>
+</body>
+</html>
